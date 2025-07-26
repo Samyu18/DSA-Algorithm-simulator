@@ -1,0 +1,1206 @@
+<script>
+function renderGreedy(state, highlight = {}) {
+    const visualization = document.getElementById('visualization');
+    // Activity Selection
+    if (state.activities) {
+        const activities = state.activities;
+        const selected = state.selected || [];
+        const rejected = state.rejected || [];
+        const result = state.result || [];
+        const table = document.createElement('table');
+        table.style.width = '100%';
+        table.style.margin = '0 auto 18px auto';
+        table.style.borderCollapse = 'collapse';
+        const header = document.createElement('tr');
+        header.innerHTML = '<th style="color:#f1f5f9;padding:8px 0;">#</th><th style="color:#f1f5f9;padding:8px 0;">Start</th><th style="color:#f1f5f9;padding:8px 0;">End</th><th style="color:#f1f5f9;padding:8px 0;">Status</th>';
+        table.appendChild(header);
+        activities.forEach((act, i) => {
+            const row = document.createElement('tr');
+            let status = '';
+            let style = '';
+            if (selected.includes(i)) {
+                status = 'Selected';
+                style = 'background: #10b981; color: #fff; font-weight: bold;';
+            } else if (rejected.includes(i)) {
+                status = 'Rejected';
+                style = 'background: #f43f5e; color: #fff;';
+            }
+            row.innerHTML = '<td style="padding:6px 0;text-align:center;' + style + '">' + (i+1) + '</td>' + '<td style="padding:6px 0;text-align:center;' + style + '">' + act[0] + '</td>' + '<td style="padding:6px 0;text-align:center;' + style + '">' + act[1] + '</td>' + '<td style="padding:6px 0;text-align:center;' + style + '">' + status + '</td>';
+            table.appendChild(row);
+        });
+        visualization.appendChild(table);
+        if (result.length) {
+            const resDiv = document.createElement('div');
+            resDiv.style.color = '#10b981';
+            resDiv.style.fontWeight = 'bold';
+            resDiv.style.fontSize = '1.2em';
+            resDiv.style.marginTop = '10px';
+            resDiv.textContent = `Final selection: ${result.length} activities`;
+            visualization.appendChild(resDiv);
+        }
+    }
+    // Fractional Knapsack
+    if (state.items) {
+        const items = state.items;
+        const selected = state.selected || [];
+        const partial = state.partial || [];
+        const table = document.createElement('table');
+        table.style.width = '100%';
+        table.style.margin = '0 auto 18px auto';
+        table.style.borderCollapse = 'collapse';
+        const header = document.createElement('tr');
+        header.innerHTML = '<th style="color:#f1f5f9;padding:8px 0;">#</th><th style="color:#f1f5f9;padding:8px 0;">Weight</th><th style="color:#f1f5f9;padding:8px 0;">Value</th><th style="color:#f1f5f9;padding:8px 0;">Status</th>';
+        table.appendChild(header);
+        items.forEach((item, i) => {
+            const row = document.createElement('tr');
+            let status = '';
+            let style = '';
+            if (selected.includes(i)) {
+                status = 'Selected';
+                style = 'background: #10b981; color: #fff; font-weight: bold;';
+            } else if (partial.length && partial[0] === i) {
+                status = `Partial (${(partial[1]*100).toFixed(1)}%)`;
+                style = 'background: #f59e0b; color: #fff; font-weight: bold;';
+            }
+            row.innerHTML = '<td style="padding:6px 0;text-align:center;' + style + '">' + (i+1) + '</td>' + '<td style="padding:6px 0;text-align:center;' + style + '">' + item[0] + '</td>' + '<td style="padding:6px 0;text-align:center;' + style + '">' + item[1] + '</td>' + '<td style="padding:6px 0;text-align:center;' + style + '">' + status + '</td>';
+            table.appendChild(row);
+        });
+        visualization.appendChild(table);
+        if (state.result !== undefined) {
+            const resDiv = document.createElement('div');
+            resDiv.style.color = '#10b981';
+            resDiv.style.fontWeight = 'bold';
+            resDiv.style.fontSize = '1.2em';
+            resDiv.style.marginTop = '10px';
+            resDiv.textContent = `Total value: ${state.result}`;
+            visualization.appendChild(resDiv);
+        }
+    }
+}
+</script>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Algorithm Visualizer</title>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600&family=Inter:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #334155 100%);
+            min-height: 100vh;
+            margin: 0;
+            padding: 0;
+            color: #f1f5f9;
+            position: relative;
+            overflow-x: hidden;
+        }
+        /* Animated background: diagonal moving dots */
+        .bg-anim {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            pointer-events: none;
+            z-index: 0;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: rgba(30,41,59,0.98);
+            border-radius: 24px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.25);
+            padding: 36px 24px 24px 24px;
+            position: relative;
+            z-index: 1;
+        }
+        h1, h2, h3, h4, h5 {
+            font-family: 'Inter', 'Segoe UI', Arial, sans-serif;
+            color: #f1f5f9;
+            letter-spacing: 0.01em;
+        }
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 20px;
+            margin-bottom: 32px;
+            padding: 20px;
+            background: rgba(51,65,85,0.95);
+            border-radius: 18px;
+            box-shadow: 0 4px 16px rgba(59,130,246,0.08);
+        }
+        .control-group label {
+            color: #94a3b8;
+            font-size: 0.95em;
+            font-weight: 600;
+        }
+        select, input, button {
+            padding: 12px 16px;
+            font-size: 1rem;
+            border-radius: 10px;
+            border: 2px solid #334155;
+            background: #232e41;
+            color: #f1f5f9;
+            transition: box-shadow 0.3s, border-color 0.3s;
+        }
+        select:focus, input:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59,130,246,0.18);
+        }
+        button {
+            background: linear-gradient(90deg, #3b82f6 0%, #8b5cf6 100%);
+            color: #f1f5f9;
+            border: none;
+            font-weight: 600;
+            box-shadow: 0 0 12px 2px #3b82f6, 0 2px 8px rgba(0,0,0,0.18);
+            position: relative;
+        }
+        button:hover, button:focus {
+            background: linear-gradient(90deg, #8b5cf6 0%, #3b82f6 100%);
+            box-shadow: 0 0 18px 4px #8b5cf6, 0 4px 16px rgba(0,0,0,0.22);
+        }
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+        .visualization-container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        #visualization {
+            display: flex;
+            align-items: flex-end;
+            height: 520px;
+            background: rgba(30,41,59,0.98);
+            border-radius: 24px;
+            padding: 36px 36px 36px 36px;
+            min-height: 400px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.22);
+        }
+        .bar {
+            flex: 1;
+            margin: 0 8px;
+            background: linear-gradient(180deg, #3b82f6 0%, #8b5cf6 100%);
+            border-radius: 16px 16px 0 0;
+            transition: all 0.4s cubic-bezier(.4,2,.6,1);
+            position: relative;
+            box-shadow: 0 4px 16px rgba(59,130,246,0.18);
+            min-width: 48px;
+            max-width: 80px;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+        }
+        .bar.compare {
+            background: linear-gradient(180deg, #f59e0b 0%, #fbbf24 100%);
+            box-shadow: 0 0 16px 2px #f59e0b;
+            transform: scale(1.05);
+        }
+        .bar.swap {
+            background: linear-gradient(180deg, #f43f5e 0%, #be123c 100%);
+            box-shadow: 0 0 16px 2px #f43f5e;
+            transform: scale(1.1);
+        }
+        .bar.insert, .bar.move {
+            background: linear-gradient(180deg, #10b981 0%, #22d3ee 100%);
+            box-shadow: 0 0 16px 2px #10b981;
+        }
+        .bar.search {
+            background: linear-gradient(180deg, #8b5cf6 0%, #3b82f6 100%);
+            box-shadow: 0 0 16px 2px #8b5cf6;
+            transform: scale(1.05);
+        }
+        .bar.found {
+            background: linear-gradient(180deg, #f59e0b 0%, #fbbf24 100%);
+            box-shadow: 0 0 24px 4px #f59e0b;
+            transform: scale(1.1);
+        }
+        .bar-label {
+            position: absolute;
+            bottom: -38px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 1.25rem;
+            color: #f1f5f9;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            text-shadow: 0 2px 8px #334155, 0 1px 2px #0008;
+            padding: 2px 8px;
+            border-radius: 8px;
+        }
+        .trace-log {
+            background: #232e41;
+            border-radius: 16px;
+            padding: 20px;
+            max-height: 220px;
+            overflow-y: auto;
+            font-size: 0.98rem;
+            border: 2px solid #334155;
+            color: #f1f5f9;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+        }
+        .trace-step {
+            padding: 8px 12px;
+            margin: 4px 0;
+            border-radius: 10px;
+            background: #334155;
+            border-left: 4px solid #3b82f6;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            color: #f1f5f9;
+        }
+        .code-panel {
+            background: #232e41;
+            border-radius: 16px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.25);
+            padding: 18px 20px;
+            font-family: 'Fira Code', 'Fira Mono', 'Consolas', monospace;
+            color: #f1f5f9;
+            font-size: 1.02em;
+            margin: 18px 0;
+            overflow-x: auto;
+        }
+        .graph-container, .tree-container, .board-container {
+            background: #1e293b;
+            border-radius: 18px;
+            padding: 20px;
+            color: #f1f5f9;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+        }
+        .chess-board {
+            background: #334155;
+        }
+        .chess-cell.white { background: #f1f5f9; color: #0f172a; }
+        .chess-cell.black { background: #334155; color: #f1f5f9; }
+        .chess-cell.queen { background: #f43f5e; color: #f1f5f9; }
+        .dp-table {
+            display: grid;
+            gap: 2px;
+            background: #334155;
+            padding: 10px;
+            border-radius: 10px;
+            max-width: 600px;
+            overflow-x: auto;
+            font-family: 'Fira Code', 'Fira Mono', 'Consolas', monospace;
+        }
+        .dp-cell {
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #1e293b;
+            border-radius: 5px;
+            font-size: 1rem;
+            font-weight: 600;
+            color: #f1f5f9;
+            transition: all 0.3s ease;
+            font-family: 'Fira Code', 'Fira Mono', 'Consolas', monospace;
+        }
+        .dp-cell.highlight {
+            background: #f59e0b;
+            color: #0f172a;
+            font-weight: 700;
+            box-shadow: 0 0 8px 2px #f59e0b;
+        }
+        .hidden { display: none; }
+        .loading {
+            border-top: 3px solid #3b82f6;
+        }
+        .error {
+            background: #f43f5e;
+            color: #f1f5f9;
+            padding: 10px;
+            border-radius: 8px;
+        }
+        /* Animated diagonal dots */
+        @keyframes moveDots {
+            0% { transform: translate(0,0); }
+            100% { transform: translate(80px,80px); }
+        }
+        .bg-anim svg {
+            width: 100vw; height: 100vh;
+            position: absolute; top: 0; left: 0;
+            z-index: 0;
+            opacity: 0.18;
+            pointer-events: none;
+            animation: moveDots 12s linear infinite alternate;
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-anim">
+        <svg>
+            <defs>
+                <radialGradient id="dotGrad" cx="50%" cy="50%" r="50%">
+                    <stop offset="0%" stop-color="#3b82f6" stop-opacity="0.7"/>
+                    <stop offset="100%" stop-color="#0f172a" stop-opacity="0.1"/>
+                </radialGradient>
+            </defs>
+            <!-- Animated dots pattern -->
+            <g>
+                <circle cx="60" cy="60" r="6" fill="url(#dotGrad)"/>
+                <circle cx="180" cy="120" r="7" fill="url(#dotGrad)"/>
+                <circle cx="320" cy="200" r="5" fill="url(#dotGrad)"/>
+                <circle cx="500" cy="100" r="8" fill="url(#dotGrad)"/>
+                <circle cx="700" cy="300" r="6" fill="url(#dotGrad)"/>
+                <circle cx="900" cy="180" r="7" fill="url(#dotGrad)"/>
+                <circle cx="1100" cy="80" r="5" fill="url(#dotGrad)"/>
+                <circle cx="1300" cy="350" r="8" fill="url(#dotGrad)"/>
+            </g>
+        </svg>
+    </div>
+    <div class="container">
+        <h1>🎯 Algorithm Visualizer</h1>
+        
+        <div class="controls">
+            <div class="control-group">
+                <label for="category">Category:</label>
+                <select id="category" onchange="onCategoryChange()">
+                    <option value="sorting">Sorting Algorithms</option>
+                    <option value="searching">Searching Algorithms</option>
+                    <option value="greedy">Greedy Algorithms</option>
+                    <option value="dp">Dynamic Programming</option>
+                    <option value="tree">Tree Algorithms</option>
+                    <option value="graph">Graph Algorithms</option>
+                    <option value="backtracking">Backtracking</option>
+                    <option value="bit_manipulation">Bit Manipulation</option>
+                    <option value="sliding_window">Sliding Window</option>
+                </select>
+            </div>
+            
+            <div class="control-group">
+                <label for="algorithm">Algorithm:</label>
+                <select id="algorithm" onchange="onAlgorithmChange()"></select>
+            </div>
+            
+            <div class="control-group" id="input-fields">
+                <!-- Dynamic input fields will be inserted here -->
+            </div>
+            
+            <div class="control-group">
+                <label>&nbsp;</label>
+                <button onclick="runAlgorithm()" id="run-btn">
+                    <span id="run-text">Run & Visualize</span>
+                    <span id="run-loading" class="loading hidden"></span>
+                </button>
+            </div>
+            <div class="control-group">
+                <label for="speed">Speed:</label>
+                <select id="speed" onchange="onSpeedChange()">
+                    <option value="1200">Slow</option>
+                    <option value="800" selected>Normal</option>
+                    <option value="400">Fast</option>
+                    <option value="100">Very Fast</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label>&nbsp;</label>
+                <div style="display: flex; gap: 8px;">
+                    <button onclick="pauseAnimation()" id="pause-btn" disabled>Pause</button>
+                    <button onclick="resumeAnimation()" id="resume-btn" disabled>Resume</button>
+                    <button onclick="stopAnimation()" id="stop-btn" disabled>Stop</button>
+                    <button onclick="restartAnimation()" id="restart-btn" disabled>Restart</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="visualization-container">
+            <div id="visualization"></div>
+            <div class="trace-log" id="trace-log"></div>
+        </div>
+    </div>
+
+    <script>
+        const algorithms = {
+            sorting: [
+                { value: 'bubble', label: 'Bubble Sort', inputs: ['array'] },
+                { value: 'selection', label: 'Selection Sort', inputs: ['array'] },
+                { value: 'insertion', label: 'Insertion Sort', inputs: ['array'] },
+                { value: 'merge', label: 'Merge Sort', inputs: ['array'] },
+                { value: 'quick', label: 'Quick Sort', inputs: ['array'] },
+                { value: 'heap', label: 'Heap Sort', inputs: ['array'] },
+                { value: 'counting', label: 'Counting Sort', inputs: ['array'] },
+                { value: 'radix', label: 'Radix Sort', inputs: ['array'] }
+            ],
+            searching: [
+                { value: 'linear', label: 'Linear Search', inputs: ['array', 'target'] },
+                { value: 'binary', label: 'Binary Search', inputs: ['array', 'target'] },
+                { value: 'jump', label: 'Jump Search', inputs: ['array', 'target'] },
+                { value: 'exponential', label: 'Exponential Search', inputs: ['array', 'target'] },
+                { value: 'ternary', label: 'Ternary Search', inputs: ['array', 'target'] }
+            ],
+            greedy: [
+                { value: 'activity_selection', label: 'Activity Selection', inputs: ['activities'] },
+                { value: 'fractional_knapsack', label: 'Fractional Knapsack', inputs: ['weights', 'values', 'capacity'] }
+            ],
+            dp: [
+                { value: 'knapsack_01', label: '0/1 Knapsack', inputs: ['weights', 'values', 'capacity'] },
+                { value: 'lcs', label: 'Longest Common Subsequence', inputs: ['str1', 'str2'] },
+                { value: 'fibonacci', label: 'Fibonacci (DP)', inputs: ['n'] }
+            ],
+            tree: [
+                { value: 'inorder', label: 'Inorder Traversal', inputs: ['nodes'] },
+                { value: 'preorder', label: 'Preorder Traversal', inputs: ['nodes'] },
+                { value: 'postorder', label: 'Postorder Traversal', inputs: ['nodes'] },
+                { value: 'traversals', label: 'Tree Traversals', inputs: ['nodes'] }
+            ],
+            graph: [
+                { value: 'bfs', label: 'Breadth-First Search', inputs: ['graph', 'start'] },
+                { value: 'dfs', label: 'Depth-First Search', inputs: ['graph', 'start'] },
+                { value: 'dijkstra', label: "Dijkstra's Algorithm", inputs: ['graph', 'start'] },
+                { value: 'bellman_ford', label: "Bellman-Ford Algorithm", inputs: ['graph', 'start'] },
+                { value: 'floyd_warshall', label: "Floyd-Warshall Algorithm", inputs: ['graph'] },
+                { value: 'kruskal', label: "Kruskal's Algorithm", inputs: ['graph'] },
+                { value: 'prim', label: "Prim's Algorithm", inputs: ['graph', 'start'] },
+                { value: 'topological_sort', label: "Topological Sort", inputs: ['graph'] },
+                { value: 'tarjan', label: "Tarjan's Algorithm (SCC)", inputs: ['graph'] },
+                { value: 'kosaraju', label: "Kosaraju's Algorithm (SCC)", inputs: ['graph'] },
+                { value: 'union_find', label: "Union-Find (Disjoint Set)", inputs: ['graph', 'operations'] }
+            ],
+            backtracking: [
+                { value: 'n_queens', label: 'N-Queens Problem', inputs: ['n'] }
+            ],
+            bit_manipulation: [
+                { value: 'power_of_two', label: 'Power of Two', inputs: ['n'] },
+                { value: 'count_set_bits', label: 'Count Set Bits', inputs: ['n'] }
+            ],
+            sliding_window: [
+                { value: 'max_sum_subarray', label: 'Fixed Sliding Window', inputs: ['array', 'k'] },
+                { value: 'variable', label: 'Variable Sliding Window', inputs: ['s'] },
+                { value: 'two_pointer', label: 'Two Pointer Traversal', inputs: ['array', 'target'] },
+                { value: 'longest_substring_no_repeat', label: 'Longest Substring No Repeat', inputs: ['s'] }
+            ]
+        };
+
+        const defaultInputs = {
+            array: '5,3,8,4,2,7,1,6',
+            target: '4',
+            activities: '(1,4),(2,6),(3,5),(5,7),(6,8)',
+            weights: '2,3,4,5',
+            values: '3,4,5,6',
+            capacity: '10',
+            str1: 'ABCDGH',
+            str2: 'AEDFHR',
+            n: '8',
+            nodes: '5,3,7,1,4,6,8',
+            graph: '{"A":["B","C"],"B":["A","D","E"],"C":["A","F"],"D":["B"],"E":["B","F"],"F":["C","E"]}',
+            start: 'A',
+            k: '3',
+            s: 'abcabcbb',
+            operations: '[{"type":"insert","value":5},{"type":"insert","value":3},{"type":"insert","value":7},{"type":"search","value":3},{"type":"delete","value":3}]',
+            node1: '1',
+            node2: '4'
+        };
+
+        let trace = [];
+        let currentStep = 0;
+        let animating = false;
+        let paused = false;
+        let stopped = false;
+        let animationSpeed = 800;
+        let animationPromise = null;
+
+        function onSpeedChange() {
+            animationSpeed = parseInt(document.getElementById('speed').value);
+        }
+
+        function enableControlButtons(running) {
+            document.getElementById('pause-btn').disabled = !running;
+            document.getElementById('stop-btn').disabled = !running;
+            document.getElementById('restart-btn').disabled = !trace.length;
+            document.getElementById('resume-btn').disabled = !paused;
+        }
+
+        function pauseAnimation() {
+            paused = true;
+            enableControlButtons(true);
+        }
+
+        function resumeAnimation() {
+            paused = false;
+            enableControlButtons(true);
+        }
+
+        function stopAnimation() {
+            stopped = true;
+            paused = false;
+            enableControlButtons(false);
+        }
+
+        function restartAnimation() {
+            stopped = false;
+            paused = false;
+            currentStep = 0;
+            enableControlButtons(true);
+            animateTrace();
+        }
+
+        function onCategoryChange() {
+            const category = document.getElementById('category').value;
+            const algorithmSelect = document.getElementById('algorithm');
+            algorithmSelect.innerHTML = '';
+            
+            algorithms[category].forEach(algo => {
+                const option = document.createElement('option');
+                option.value = algo.value;
+                option.textContent = algo.label;
+                algorithmSelect.appendChild(option);
+            });
+            
+            onAlgorithmChange();
+        }
+
+        function onAlgorithmChange() {
+            const category = document.getElementById('category').value;
+            const algorithm = document.getElementById('algorithm').value;
+            const inputFields = document.getElementById('input-fields');
+            
+            const selectedAlgo = algorithms[category].find(a => a.value === algorithm);
+            if (!selectedAlgo) return;
+            
+            inputFields.innerHTML = '';
+            
+            selectedAlgo.inputs.forEach(input => {
+                const group = document.createElement('div');
+                group.className = 'control-group';
+                
+                const label = document.createElement('label');
+                label.textContent = `${input.charAt(0).toUpperCase() + input.slice(1)}:`;
+                
+                const inputElement = document.createElement('input');
+                inputElement.type = 'text';
+                inputElement.id = `input-${input}`;
+                inputElement.value = defaultInputs[input] || '';
+                inputElement.placeholder = `Enter ${input}`;
+                
+                group.appendChild(label);
+                group.appendChild(inputElement);
+                inputFields.appendChild(group);
+            });
+        }
+
+        function getInputValues() {
+            const category = document.getElementById('category').value;
+            const algorithm = document.getElementById('algorithm').value;
+            const selectedAlgo = algorithms[category].find(a => a.value === algorithm);
+            
+            const params = {};
+            selectedAlgo.inputs.forEach(input => {
+                const value = document.getElementById(`input-${input}`).value;
+                switch(input) {
+                    case 'array':
+                        params[input] = value.split(',').map(x => parseInt(x.trim())).filter(x => !isNaN(x));
+                        break;
+                    case 'target':
+                    case 'n':
+                    case 'k':
+                    case 'capacity':
+                        params[input] = parseInt(value);
+                        break;
+                    case 'activities': {
+                        // Parse activities as list of tuples of numbers
+                        const matches = value.match(/\(([^)]+)\)/g);
+                        if (matches) {
+                            params[input] = matches.map(pair => {
+                                const nums = pair.replace(/[()]/g, '').split(',').map(Number);
+                                return nums.length === 2 && !isNaN(nums[0]) && !isNaN(nums[1]) ? [nums[0], nums[1]] : null;
+                            }).filter(x => x !== null);
+                        } else {
+                            params[input] = [];
+                        }
+                        break;
+                    }
+                    case 'weights':
+                    case 'values':
+                        params[input] = value.split(',').map(x => parseInt(x.trim())).filter(x => !isNaN(x));
+                        break;
+                    case 'str1':
+                    case 'str2':
+                    case 's':
+                        params[input] = value;
+                        break;
+                    case 'nodes':
+                        params[input] = value.split(',').map(x => parseInt(x.trim())).filter(x => !isNaN(x));
+                        break;
+                    case 'graph':
+                        try {
+                            params[input] = JSON.parse(value);
+                        } catch (e) {
+                            console.error('Error parsing graph:', e);
+                            params[input] = {};
+                        }
+                        break;
+                    case 'start':
+                        params[input] = value;
+                        break;
+                    case 'operations':
+                        try {
+                            params[input] = JSON.parse(value);
+                        } catch (e) {
+                            console.error('Error parsing operations:', e);
+                            params[input] = [];
+                        }
+                        break;
+                    case 'node1':
+                    case 'node2':
+                        params[input] = parseInt(value);
+                        break;
+                    default:
+                        params[input] = value;
+                }
+            });
+            
+            return params;
+        }
+
+        function renderArray(state, highlight = {}) {
+            const visualization = document.getElementById('visualization');
+            visualization.innerHTML = '';
+            if (state.array) {
+                const arr = state.array;
+                const windowIndices = state.window || null;
+                const pointers = state.pointers || null;
+                const order = state.order;
+                const sum = state.sum;
+                const barContainer = document.createElement('div');
+                barContainer.style.display = 'flex';
+                barContainer.style.alignItems = 'flex-end';
+                barContainer.style.height = '100%';
+                barContainer.style.justifyContent = 'center';
+                barContainer.style.width = '100%';
+                arr.forEach((val, idx) => {
+                    const bar = document.createElement('div');
+                    bar.className = 'bar';
+                    bar.style.height = (val * 12 + 40) + 'px'; // much taller bars
+                    if (highlight.compare && highlight.compare.includes(idx)) bar.classList.add('compare');
+                    if (highlight.swap && highlight.swap.includes(idx)) bar.classList.add('swap');
+                    if (highlight.insert && highlight.insert.includes(idx)) bar.classList.add('insert');
+                    if (highlight.move && highlight.move.includes(idx)) bar.classList.add('move');
+                    if (highlight.search && highlight.search.includes(idx)) bar.classList.add('search');
+                    if (highlight.found && highlight.found.includes(idx)) bar.classList.add('found');
+                    if (highlight.highlight && highlight.highlight.includes(idx)) bar.classList.add('compare');
+                    // Sliding window highlight
+                    if (windowIndices && idx >= windowIndices[0] && idx <= windowIndices[1]) {
+                        bar.classList.add('search');
+                    }
+                    // Two pointer highlight
+                    if (pointers && pointers.includes(idx)) {
+                        bar.classList.add('found');
+                    }
+                    // Show order number
+                    if (order !== undefined) {
+                        const orderDiv = document.createElement('div');
+                        orderDiv.style.position = 'absolute';
+                        orderDiv.style.top = '-28px';
+                        orderDiv.style.left = '50%';
+                        orderDiv.style.transform = 'translateX(-50%)';
+                        orderDiv.style.fontSize = '1.1em';
+                        orderDiv.style.color = '#f59e0b';
+                        orderDiv.style.fontWeight = 'bold';
+                        orderDiv.textContent = order;
+                        bar.appendChild(orderDiv);
+                    }
+                    bar.innerHTML += `<div class="bar-label">${val}</div>`;
+                    barContainer.appendChild(bar);
+                });
+                visualization.appendChild(barContainer);
+                // Show window sum/result if present
+                if (sum !== undefined) {
+                    const sumDiv = document.createElement('div');
+                    sumDiv.style.marginTop = '18px';
+                    sumDiv.style.color = '#10b981';
+                    sumDiv.style.fontWeight = 'bold';
+                    sumDiv.style.fontSize = '1.3em';
+                    sumDiv.textContent = `Window sum: ${sum}`;
+                    visualization.appendChild(sumDiv);
+                }
+            }
+            // String-based sliding window
+            if (state.string && state.window) {
+                const s = state.string;
+                const [left, right] = state.window;
+                const strDiv = document.createElement('div');
+                strDiv.style.fontSize = '1.2em';
+                strDiv.style.margin = '16px 0';
+                for (let i = 0; i < s.length; i++) {
+                    const span = document.createElement('span');
+                    span.textContent = s[i];
+                    if (i >= left && i <= right) {
+                        span.style.background = '#3b82f6';
+                        span.style.color = '#fff';
+                        span.style.borderRadius = '4px';
+                        span.style.padding = '2px 4px';
+                    } else {
+                        span.style.opacity = '0.6';
+                    }
+                    strDiv.appendChild(span);
+                }
+                visualization.appendChild(strDiv);
+            }
+        }
+
+        function renderGraph(state, highlight = {}) {
+            const visualization = document.getElementById('visualization');
+            visualization.innerHTML = '';
+            if (!state.graph) {
+                visualization.innerHTML = '<div class="graph-container">No graph data</div>';
+                return;
+            }
+            const graph = state.graph;
+            const nodes = Object.keys(graph);
+            if (nodes.length === 0) {
+                visualization.innerHTML = '<div class="graph-container">Empty graph</div>';
+                return;
+            }
+            const nodeCount = nodes.length;
+            const centerX = 300;
+            const centerY = 180;
+            const radius = 120;
+            const nodePos = {};
+            // Place nodes in a circle
+            nodes.forEach((node, i) => {
+                const angle = (2 * Math.PI * i) / nodeCount;
+                nodePos[node] = {
+                    x: centerX + radius * Math.cos(angle),
+                    y: centerY + radius * Math.sin(angle)
+                };
+            });
+            // SVG setup
+            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            svg.setAttribute('width', 600);
+            svg.setAttribute('height', 360);
+            svg.style.display = 'block';
+            svg.style.margin = '0 auto';
+            // Draw edges
+            nodes.forEach(node => {
+                const neighbors = graph[node];
+                if (Array.isArray(neighbors)) {
+                    neighbors.forEach(neigh => {
+                        if (nodePos[neigh]) {
+                            const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                            line.setAttribute('x1', nodePos[node].x);
+                            line.setAttribute('y1', nodePos[node].y);
+                            line.setAttribute('x2', nodePos[neigh].x);
+                            line.setAttribute('y2', nodePos[neigh].y);
+                            line.setAttribute('stroke', '#bbb');
+                            line.setAttribute('stroke-width', 2);
+                            svg.appendChild(line);
+                        }
+                    });
+                } else if (typeof neighbors === 'object') {
+                    Object.keys(neighbors).forEach(neigh => {
+                        if (nodePos[neigh]) {
+                            const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                            line.setAttribute('x1', nodePos[node].x);
+                            line.setAttribute('y1', nodePos[node].y);
+                            line.setAttribute('x2', nodePos[neigh].x);
+                            line.setAttribute('y2', nodePos[neigh].y);
+                            line.setAttribute('stroke', '#bbb');
+                            line.setAttribute('stroke-width', 2);
+                            // Highlight MST edges for Kruskal/Prim
+                            if (state.mst && state.mst.some(e => (e[0] === node && e[1] === neigh) || (e[0] === neigh && e[1] === node))) {
+                                line.setAttribute('stroke', '#10b981');
+                                line.setAttribute('stroke-width', 5);
+                            }
+                            svg.appendChild(line);
+                        }
+                    });
+                }
+            });
+            // Draw nodes
+            nodes.forEach(node => {
+                const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                circle.setAttribute('cx', nodePos[node].x);
+                circle.setAttribute('cy', nodePos[node].y);
+                circle.setAttribute('r', 28);
+                circle.setAttribute('fill', '#667eea');
+                circle.setAttribute('stroke', '#2c3e50');
+                circle.setAttribute('stroke-width', 3);
+                // Highlight current/visited
+                if (highlight.visit && highlight.visit.includes(node)) {
+                    circle.setAttribute('fill', '#f59e0b');
+                }
+                if (highlight.current && highlight.current.includes(node)) {
+                    circle.setAttribute('fill', '#e74c3c');
+                }
+                if (highlight.update && (highlight.update[0] === node || highlight.update[1] === node)) {
+                    circle.setAttribute('fill', '#10b981');
+                }
+                if (highlight.found && highlight.found.includes(node)) {
+                    circle.setAttribute('fill', '#f43f5e');
+                }
+                g.appendChild(circle);
+                // Node label
+                const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                text.setAttribute('x', nodePos[node].x);
+                text.setAttribute('y', nodePos[node].y + 6);
+                text.setAttribute('text-anchor', 'middle');
+                text.setAttribute('font-size', '1.2em');
+                text.setAttribute('fill', '#fff');
+                text.setAttribute('font-weight', 'bold');
+                text.textContent = node;
+                g.appendChild(text);
+                svg.appendChild(g);
+            });
+            visualization.appendChild(svg);
+        }
+
+        function renderTree(state, highlight = {}) {
+            const visualization = document.getElementById('visualization');
+            visualization.innerHTML = '';
+            if (!state.tree || !state.tree.length) {
+                visualization.innerHTML = '<div class="tree-container">No tree data</div>';
+                return;
+            }
+            const nodes = state.tree;
+            if (nodes.length === 0) return;
+            
+            // Build tree structure
+            const root = buildTree(nodes);
+            const treeData = getTreeLayout(root);
+            
+            // SVG setup
+            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            svg.setAttribute('width', 600);
+            svg.setAttribute('height', 400);
+            svg.style.display = 'block';
+            svg.style.margin = '0 auto';
+            
+            // Draw edges
+            drawTreeEdges(svg, treeData);
+            
+            // Draw nodes
+            drawTreeNodes(svg, treeData, highlight);
+            
+            visualization.appendChild(svg);
+        }
+        
+        function buildTree(nodes) {
+            if (nodes.length === 0) return null;
+            const root = { val: nodes[0], left: null, right: null };
+            for (let i = 1; i < nodes.length; i++) {
+                insertNode(root, nodes[i]);
+            }
+            return root;
+        }
+        
+        function insertNode(root, val) {
+            if (val < root.val) {
+                if (root.left === null) {
+                    root.left = { val, left: null, right: null };
+                } else {
+                    insertNode(root.left, val);
+                }
+            } else {
+                if (root.right === null) {
+                    root.right = { val, left: null, right: null };
+                } else {
+                    insertNode(root.right, val);
+                }
+            }
+        }
+        
+        function getTreeLayout(root, x = 300, y = 50, level = 0) {
+            if (!root) return null;
+            const spacing = 80 / (level + 1);
+            const node = {
+                val: root.val,
+                x: x,
+                y: y,
+                left: null,
+                right: null
+            };
+            if (root.left) {
+                node.left = getTreeLayout(root.left, x - spacing, y + 60, level + 1);
+            }
+            if (root.right) {
+                node.right = getTreeLayout(root.right, x + spacing, y + 60, level + 1);
+            }
+            return node;
+        }
+        
+        function drawTreeEdges(svg, node) {
+            if (!node) return;
+            if (node.left) {
+                const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                line.setAttribute('x1', node.x);
+                line.setAttribute('y1', node.y);
+                line.setAttribute('x2', node.left.x);
+                line.setAttribute('y2', node.left.y);
+                line.setAttribute('stroke', '#667eea');
+                line.setAttribute('stroke-width', 3);
+                svg.appendChild(line);
+                drawTreeEdges(svg, node.left);
+            }
+            if (node.right) {
+                const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                line.setAttribute('x1', node.x);
+                line.setAttribute('y1', node.y);
+                line.setAttribute('x2', node.right.x);
+                line.setAttribute('y2', node.right.y);
+                line.setAttribute('stroke', '#667eea');
+                line.setAttribute('stroke-width', 3);
+                svg.appendChild(line);
+                drawTreeEdges(svg, node.right);
+            }
+        }
+        
+        function drawTreeNodes(svg, node, highlight) {
+            if (!node) return;
+            
+            // Draw node circle
+            const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            circle.setAttribute('cx', node.x);
+            circle.setAttribute('cy', node.y);
+            circle.setAttribute('r', 25);
+            circle.setAttribute('fill', '#667eea');
+            circle.setAttribute('stroke', '#2c3e50');
+            circle.setAttribute('stroke-width', 3);
+            
+            // Highlight if this node is being visited
+            if (highlight.visit && highlight.visit.includes(node.val)) {
+                circle.setAttribute('fill', '#f39c12');
+                circle.setAttribute('stroke', '#e67e22');
+                circle.setAttribute('stroke-width', 4);
+            }
+            
+            svg.appendChild(circle);
+            
+            // Draw node value
+            const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            text.setAttribute('x', node.x);
+            text.setAttribute('y', node.y + 5);
+            text.setAttribute('text-anchor', 'middle');
+            text.setAttribute('font-size', '1.1em');
+            text.setAttribute('fill', '#fff');
+            text.setAttribute('font-weight', 'bold');
+            text.textContent = node.val;
+            svg.appendChild(text);
+            
+            // Recursively draw children
+            if (node.left) drawTreeNodes(svg, node.left, highlight);
+            if (node.right) drawTreeNodes(svg, node.right, highlight);
+        }
+
+        function renderBoard(state, highlight = {}) {
+            const visualization = document.getElementById('visualization');
+            visualization.innerHTML = '';
+            if (state.board) {
+                const board = state.board;
+                const n = board.length;
+                const container = document.createElement('div');
+                container.className = 'board-container';
+                const chessBoard = document.createElement('div');
+                chessBoard.className = 'chess-board';
+                chessBoard.style.display = 'grid';
+                chessBoard.style.gridTemplateColumns = `repeat(${n}, 40px)`;
+                chessBoard.style.gridTemplateRows = `repeat(${n}, 40px)`;
+                for (let i = 0; i < n; i++) {
+                    for (let j = 0; j < n; j++) {
+                        const cellDiv = document.createElement('div');
+                        cellDiv.className = `chess-cell ${(i + j) % 2 === 0 ? 'white' : 'black'}`;
+                        if (board[i][j] === 1) {
+                            cellDiv.classList.add('queen');
+                            cellDiv.innerHTML = '♛';
+                        }
+                        // Highlight current row being explored
+                        if (highlight.place && highlight.place[0] === i) {
+                            cellDiv.style.boxShadow = '0 0 8px 2px #3b82f6';
+                        }
+                        if (highlight.remove && highlight.remove[0] === i) {
+                            cellDiv.style.boxShadow = '0 0 8px 2px #f43f5e';
+                        }
+                        chessBoard.appendChild(cellDiv);
+                    }
+                }
+                container.appendChild(chessBoard);
+                visualization.appendChild(container);
+            }
+        }
+
+        function renderDPTable(state, highlight = {}) {
+            const visualization = document.getElementById('visualization');
+            visualization.innerHTML = '';
+            
+            if (state.dp) {
+                const dp = state.dp;
+                const container = document.createElement('div');
+                container.className = 'board-container';
+                
+                const table = document.createElement('div');
+                table.className = 'dp-table';
+                table.style.gridTemplateColumns = `repeat(${dp[0].length}, 40px)`;
+                
+                dp.forEach((row, i) => {
+                    row.forEach((cell, j) => {
+                        const cellDiv = document.createElement('div');
+                        cellDiv.className = 'dp-cell';
+                        cellDiv.textContent = cell;
+                        // Highlight the cell if it's being updated
+                        if (highlight.dp && highlight.dp[0] === i && highlight.dp[1] === j) {
+                            cellDiv.classList.add('highlight');
+                        }
+                        table.appendChild(cellDiv);
+                    });
+                });
+                
+                container.appendChild(table);
+                visualization.appendChild(container);
+            }
+        }
+
+        function logTrace(state, highlight) {
+            const traceLog = document.getElementById('trace-log');
+            const stepDiv = document.createElement('div');
+            stepDiv.className = 'trace-step';
+            if (state.step) {
+                stepDiv.textContent = state.step;
+            } else if (state.array) {
+                stepDiv.textContent = 'Array: ' + state.array.join(', ');
+            } else if (state.string) {
+                stepDiv.textContent = 'String: ' + state.string;
+            } else {
+                stepDiv.textContent = JSON.stringify(state);
+            }
+            traceLog.appendChild(stepDiv);
+            traceLog.scrollTop = traceLog.scrollHeight;
+        }
+
+        async function animateTrace() {
+            animating = true;
+            stopped = false;
+            paused = false;
+            enableControlButtons(true);
+            const traceLog = document.getElementById('trace-log');
+            traceLog.innerHTML = '';
+            
+            for (let i = currentStep; i < trace.length; i++) {
+                if (stopped) break;
+                while (paused) {
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
+                currentStep = i;
+                const state = trace[i];
+                const highlight = {};
+                // Extract highlight information for all possible keys
+                Object.keys(state).forEach(key => {
+                    if ([
+                        'compare', 'swap', 'insert', 'move', 'search', 'found', 'highlight',
+                        'visit', 'current', 'update', 'delete', 'lca', 'place', 'remove',
+                        'window', 'pointers'
+                    ].includes(key)) {
+                        highlight[key] = state[key];
+                    }
+                });
+                // Render based on state type
+                if (state.array) {
+                    renderArray(state, highlight);
+                } else if (state.activities || state.items) {
+                    renderGreedy(state, highlight);
+                } else if (state.board) {
+                    renderBoard(state, highlight);
+                } else if (state.dp) {
+                    renderDPTable(state, highlight);
+                } else if (state.graph) {
+                    renderGraph(state, highlight);
+                } else if (state.tree) {
+                    renderTree(state, highlight);
+                }
+                // Always log every step
+                logTrace(state, highlight);
+                await new Promise(resolve => setTimeout(resolve, animationSpeed));
+            }
+            
+            animating = false;
+            enableControlButtons(false);
+        }
+
+        async function runAlgorithm() {
+            if (animating) return;
+            
+            const runBtn = document.getElementById('run-btn');
+            const runText = document.getElementById('run-text');
+            const runLoading = document.getElementById('run-loading');
+            
+            runBtn.disabled = true;
+            runText.classList.add('hidden');
+            runLoading.classList.remove('hidden');
+            
+            try {
+                const category = document.getElementById('category').value;
+                const algorithm = document.getElementById('algorithm').value;
+                const params = getInputValues();
+                
+                console.log('Running algorithm:', { category, algorithm, params });
+                
+                const response = await fetch('/api/run_algorithm', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ category, algorithm, params })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                console.log('Response data:', data);
+                
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+                
+                if (!data.trace || !Array.isArray(data.trace) || data.trace.length === 0) {
+                    throw new Error('No trace data received from server');
+                }
+                
+                trace = data.trace;
+                currentStep = 0;
+                enableControlButtons(true);
+                await animateTrace();
+                
+            } catch (error) {
+                console.error('Algorithm execution error:', error);
+                const traceLog = document.getElementById('trace-log');
+                traceLog.innerHTML = `<div class="error">Error: ${error.message}</div>`;
+                
+                // Also show error in visualization area for visibility
+                const visualization = document.getElementById('visualization');
+                visualization.innerHTML = `<div class="error" style="margin: 20px; padding: 20px;">Error: ${error.message}</div>`;
+            } finally {
+                runBtn.disabled = false;
+                runText.classList.remove('hidden');
+                runLoading.classList.add('hidden');
+            }
+        }
+
+        // Initialize on page load
+        window.onload = () => {
+            onCategoryChange();
+            // Test that the website is working
+            console.log('Algorithm Visualizer loaded successfully');
+        };
+
+        // Test function to verify everything is working
+        function testWebsite() {
+            console.log('Testing website functionality...');
+            console.log('Categories available:', Object.keys(algorithms));
+            console.log('Default inputs:', defaultInputs);
+            
+            // Test a simple algorithm
+            const testParams = {
+                category: 'sorting',
+                algorithm: 'bubble',
+                params: { array: [5, 3, 8, 4, 2] }
+            };
+            
+            console.log('Test parameters:', testParams);
+        }
+    </script>
+</body>
+</html> 
